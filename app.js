@@ -6,7 +6,7 @@
   const filterBar = document.getElementById('filter-bar');
   const emptyState = document.getElementById('empty-state');
   const detailBody = document.getElementById('detail-body');
-  const backBtn = document.getElementById('back-btn');
+  const backBtns = document.querySelectorAll('.back-btn');
   const resultCount = document.getElementById('result-count');
 
   let activeCategory = 'all';
@@ -42,16 +42,33 @@
     emptyState.hidden = filtered.length !== 0;
 
     cardsEl.innerHTML = filtered
-      .map(
-        (item) => `
+      .map((item) => {
+        const thumb = item.diagrams && item.diagrams[0];
+        const thumbSvg = thumb
+          ? thumb.type === 'candle'
+            ? renderCandleSVG(thumb.data, { width: 80, height: 80 })
+            : renderLineSVG(thumb.data, { width: 80, height: 80 })
+          : '';
+        return `
       <button class="card" data-id="${item.id}">
-        <span class="card-cat">${CATEGORY_LABELS[item.category] || item.category}</span>
-        <h3 class="card-title">${item.title}</h3>
-        <p class="card-summary">${item.summary}</p>
-        <div class="card-tags">${(item.tags || []).slice(0, 4).map((t) => `<span>#${t}</span>`).join('')}</div>
-      </button>`
-      )
+        ${thumbSvg ? `<div class="card-thumb">${thumbSvg}</div>` : ''}
+        <div class="card-main">
+          <span class="card-cat">${CATEGORY_LABELS[item.category] || item.category}</span>
+          <h3 class="card-title">${item.title}</h3>
+          <p class="card-summary">${item.summary}</p>
+          <div class="card-tags">${(item.tags || []).slice(0, 4).map((t) => `<span>#${t}</span>`).join('')}</div>
+        </div>
+      </button>`;
+      })
       .join('');
+  }
+
+  function resolveInlineLinks(html) {
+    return html.replace(/\[\[([\w-]+)\]\]/g, (match, id) => {
+      const target = KNOWLEDGE.find((k) => k.id === id);
+      if (!target) return match;
+      return `<a href="#" class="inline-link" data-nav-id="${id}">${target.title}</a>`;
+    });
   }
 
   function renderDiagram(diagram) {
@@ -85,14 +102,14 @@
           (s) => `
         <section class="detail-section">
           <h3>${s.heading}</h3>
-          <div>${s.html}</div>
+          <div>${resolveInlineLinks(s.html)}</div>
         </section>`
         )
         .join('')}
 
       <section class="detail-section forecast">
-        <h3>📈 今後のチャートの動き方</h3>
-        <div>${item.forecast}</div>
+        <h3>今後のチャートの動き方</h3>
+        <div>${resolveInlineLinks(item.forecast)}</div>
       </section>
 
       <div class="card-tags detail-tags">${(item.tags || []).map((t) => `<span>#${t}</span>`).join('')}</div>
@@ -114,6 +131,13 @@
     if (card) openDetail(card.dataset.id);
   });
 
+  detailBody.addEventListener('click', (e) => {
+    const link = e.target.closest('.inline-link');
+    if (!link) return;
+    e.preventDefault();
+    openDetail(link.dataset.navId);
+  });
+
   filterBar.addEventListener('click', (e) => {
     const chip = e.target.closest('.chip');
     if (!chip) return;
@@ -123,7 +147,7 @@
   });
 
   searchInput.addEventListener('input', renderCards);
-  backBtn.addEventListener('click', closeDetail);
+  backBtns.forEach((btn) => btn.addEventListener('click', closeDetail));
 
   renderFilterBar();
   renderCards();
