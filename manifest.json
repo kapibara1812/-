@@ -1,0 +1,14 @@
+{
+  "name": "チャート知識帳",
+  "short_name": "チャート知識帳",
+  "description": "ダウ理論・グランビルの法則・エリオット波動・酒田五法・ローソク足パターン・PPPなどチャート分析の知識を図解付きで検索できるアプリ",
+  "start_url": "./index.html",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#f5f6f8",
+  "theme_color": "#1f2430",
+  "lang": "ja",
+  "icons": [
+    { "src": "icons/icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any maskable" }
+  ]
+}
