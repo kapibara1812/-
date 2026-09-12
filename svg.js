@@ -48,7 +48,12 @@ function renderLineSVG(points, opts = {}) {
   let dots = '';
   let labels = '';
   points.forEach((p, i) => {
-    dots += `<circle cx="${scaleX(p.x)}" cy="${scaleY(p.y)}" r="4" fill="${opts.dotColor || '#d9424c'}"/>`;
+    if (p.highlight) {
+      dots += `<circle cx="${scaleX(p.x)}" cy="${scaleY(p.y)}" r="11" fill="none" stroke="${opts.highlightColor || '#22c55e'}" stroke-width="3"/>`;
+      dots += `<circle cx="${scaleX(p.x)}" cy="${scaleY(p.y)}" r="5" fill="${opts.highlightColor || '#22c55e'}"/>`;
+    } else {
+      dots += `<circle cx="${scaleX(p.x)}" cy="${scaleY(p.y)}" r="4" fill="${opts.dotColor || '#d9424c'}"/>`;
+    }
     if (p.label) {
       let pos = p.labelPos;
       if (!pos) {

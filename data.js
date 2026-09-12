@@ -80,22 +80,82 @@ const KNOWLEDGE = [
     diagrams: [
       {
         type: 'line',
-        caption: '買いシグナル①〜④のイメージ（赤線=株価、灰線=移動平均線）',
-        data: [{ x: 2, y: 70, labelPos: 'top' }, { x: 15, y: 30, label: '①', labelPos: 'bottom' }, { x: 28, y: 62, labelPos: 'top' }, { x: 40, y: 42, label: '②', labelPos: 'bottom' }, { x: 55, y: 72, labelPos: 'top' }, { x: 68, y: 60, label: '③', labelPos: 'bottom' }, { x: 82, y: 5, label: '④', labelPos: 'bottom' }, { x: 95, y: 48, labelPos: 'top' }],
+        caption: '①新規買い：下向きだった移動平均線が上向きに転じ、株価が下から上に抜ける',
+        data: [{ x: 3, y: 78 }, { x: 25, y: 18 }, { x: 48, y: 30, label: 'ここで買い', labelPos: 'top', highlight: true }, { x: 72, y: 55 }, { x: 97, y: 88 }],
         opts: {
           lineColor: '#d9424c',
-          height: 200,
-          extraLines: [{ points: [{ x: 2, y: 40 }, { x: 30, y: 38 }, { x: 55, y: 48 }, { x: 95, y: 65 }], color: '#8a8f98', width: 2 }]
+          height: 220,
+          extraLines: [{ points: [{ x: 3, y: 58 }, { x: 25, y: 32 }, { x: 48, y: 25 }, { x: 72, y: 38 }, { x: 97, y: 58 }], color: '#8a8f98', width: 2.5 }]
         }
       },
       {
         type: 'line',
-        caption: '売りシグナル①〜④のイメージ（青線=株価、灰線=移動平均線）',
-        data: [{ x: 2, y: 30, labelPos: 'bottom' }, { x: 15, y: 72, label: '①', labelPos: 'top' }, { x: 28, y: 40, labelPos: 'bottom' }, { x: 40, y: 58, label: '②', labelPos: 'top' }, { x: 55, y: 25, labelPos: 'bottom' }, { x: 68, y: 38, label: '③', labelPos: 'top' }, { x: 82, y: 97, label: '④', labelPos: 'top' }, { x: 95, y: 52, labelPos: 'bottom' }],
+        caption: '②押し目買い：上昇中の移動平均線を一時的に割り込むがすぐ反発',
+        data: [{ x: 3, y: 30 }, { x: 25, y: 62 }, { x: 48, y: 40, label: 'ここで買い', labelPos: 'bottom', highlight: true }, { x: 70, y: 72 }, { x: 95, y: 92 }],
+        opts: {
+          lineColor: '#d9424c',
+          height: 220,
+          extraLines: [{ points: [{ x: 3, y: 18 }, { x: 25, y: 32 }, { x: 48, y: 46 }, { x: 70, y: 56 }, { x: 95, y: 68 }], color: '#8a8f98', width: 2.5 }]
+        }
+      },
+      {
+        type: 'line',
+        caption: '③押し目買い（支持）：上昇中の移動平均線に接近するが割り込まず反発',
+        data: [{ x: 3, y: 30 }, { x: 25, y: 58 }, { x: 48, y: 50, label: 'ここで買い', labelPos: 'bottom', highlight: true }, { x: 70, y: 76 }, { x: 95, y: 92 }],
+        opts: {
+          lineColor: '#d9424c',
+          height: 220,
+          extraLines: [{ points: [{ x: 3, y: 12 }, { x: 25, y: 28 }, { x: 48, y: 42 }, { x: 70, y: 54 }, { x: 95, y: 64 }], color: '#8a8f98', width: 2.5 }]
+        }
+      },
+      {
+        type: 'line',
+        caption: '④自律反発買い（逆張り）：移動平均線から大きく下に乖離した後の反発',
+        data: [{ x: 3, y: 62 }, { x: 25, y: 70 }, { x: 48, y: 8, label: 'ここで買い', labelPos: 'bottom', highlight: true }, { x: 70, y: 40 }, { x: 95, y: 58 }],
+        opts: {
+          lineColor: '#d9424c',
+          height: 220,
+          extraLines: [{ points: [{ x: 3, y: 55 }, { x: 25, y: 58 }, { x: 48, y: 60 }, { x: 70, y: 60 }, { x: 95, y: 58 }], color: '#8a8f98', width: 2.5 }]
+        }
+      },
+      {
+        type: 'line',
+        caption: '①新規売り：上向きだった移動平均線が下向きに転じ、株価が上から下に抜ける',
+        data: [{ x: 3, y: 22 }, { x: 25, y: 82 }, { x: 48, y: 70, label: 'ここで売り', labelPos: 'top', highlight: true }, { x: 72, y: 45 }, { x: 97, y: 12 }],
         opts: {
           lineColor: '#2b6cb0',
-          height: 200,
-          extraLines: [{ points: [{ x: 2, y: 60 }, { x: 30, y: 62 }, { x: 55, y: 50 }, { x: 95, y: 32 }], color: '#8a8f98', width: 2 }]
+          height: 220,
+          extraLines: [{ points: [{ x: 3, y: 42 }, { x: 25, y: 68 }, { x: 48, y: 75 }, { x: 72, y: 62 }, { x: 97, y: 42 }], color: '#8a8f98', width: 2.5 }]
+        }
+      },
+      {
+        type: 'line',
+        caption: '②戻り売り：下降中の移動平均線を一時的に上抜けるがすぐ反落',
+        data: [{ x: 3, y: 70 }, { x: 25, y: 38 }, { x: 48, y: 60, label: 'ここで売り', labelPos: 'top', highlight: true }, { x: 70, y: 28 }, { x: 95, y: 8 }],
+        opts: {
+          lineColor: '#2b6cb0',
+          height: 220,
+          extraLines: [{ points: [{ x: 3, y: 82 }, { x: 25, y: 68 }, { x: 48, y: 54 }, { x: 70, y: 44 }, { x: 95, y: 32 }], color: '#8a8f98', width: 2.5 }]
+        }
+      },
+      {
+        type: 'line',
+        caption: '③戻り売り（抵抗）：下降中の移動平均線に接近するが上抜けずに反落',
+        data: [{ x: 3, y: 70 }, { x: 25, y: 42 }, { x: 48, y: 50, label: 'ここで売り', labelPos: 'top', highlight: true }, { x: 70, y: 24 }, { x: 95, y: 8 }],
+        opts: {
+          lineColor: '#2b6cb0',
+          height: 220,
+          extraLines: [{ points: [{ x: 3, y: 88 }, { x: 25, y: 72 }, { x: 48, y: 58 }, { x: 70, y: 46 }, { x: 95, y: 36 }], color: '#8a8f98', width: 2.5 }]
+        }
+      },
+      {
+        type: 'line',
+        caption: '④自律反落売り（逆張り）：移動平均線から大きく上に乖離した後の反落',
+        data: [{ x: 3, y: 38 }, { x: 25, y: 30 }, { x: 48, y: 92, label: 'ここで売り', labelPos: 'top', highlight: true }, { x: 70, y: 60 }, { x: 95, y: 42 }],
+        opts: {
+          lineColor: '#2b6cb0',
+          height: 220,
+          extraLines: [{ points: [{ x: 3, y: 45 }, { x: 25, y: 42 }, { x: 48, y: 40 }, { x: 70, y: 40 }, { x: 95, y: 42 }], color: '#8a8f98', width: 2.5 }]
         }
       }
     ]
