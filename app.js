@@ -28,6 +28,12 @@
     return haystack.includes(normalize(query));
   }
 
+  function selectCategory(cat) {
+    activeCategory = cat;
+    renderFilterBar();
+    renderCards();
+  }
+
   function renderFilterBar() {
     const categories = ['all', ...new Set(KNOWLEDGE.map((k) => k.category))];
     filterBar.innerHTML = categories
@@ -57,7 +63,7 @@
       <button class="card" data-id="${item.id}" style="--card-accent:${accent}">
         ${thumbSvg ? `<div class="card-thumb">${thumbSvg}</div>` : ''}
         <div class="card-main">
-          <span class="card-cat">${CATEGORY_LABELS[item.category] || item.category}</span>
+          <span class="card-cat" data-cat="${item.category}">${CATEGORY_LABELS[item.category] || item.category}</span>
           <h3 class="card-title">${item.title}</h3>
           <p class="card-summary">${item.summary}</p>
           <div class="card-tags">${(item.tags || []).slice(0, 4).map((t) => `<span>#${t}</span>`).join('')}</div>
@@ -87,7 +93,7 @@
     if (!item) return;
 
     detailBody.innerHTML = `
-      <span class="card-cat">${CATEGORY_LABELS[item.category] || item.category}</span>
+      <button class="card-cat card-cat-link" data-cat="${item.category}">${CATEGORY_LABELS[item.category] || item.category}</button>
       <h2 class="detail-title">${item.title}</h2>
       <p class="detail-summary">${item.summary}</p>
 
@@ -130,6 +136,12 @@
   });
 
   detailBody.addEventListener('click', (e) => {
+    const catBtn = e.target.closest('.card-cat-link');
+    if (catBtn) {
+      selectCategory(catBtn.dataset.cat);
+      closeDetail();
+      return;
+    }
     const link = e.target.closest('.inline-link');
     if (!link) return;
     e.preventDefault();
@@ -139,9 +151,7 @@
   filterBar.addEventListener('click', (e) => {
     const chip = e.target.closest('.chip');
     if (!chip) return;
-    activeCategory = chip.dataset.cat;
-    renderFilterBar();
-    renderCards();
+    selectCategory(chip.dataset.cat);
   });
 
   searchInput.addEventListener('input', renderCards);
