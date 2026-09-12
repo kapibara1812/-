@@ -33,11 +33,12 @@ function renderCandleSVG(candles, opts = {}) {
   </svg>`;
 }
 
-// points: [{x,y,label?}] x,yは0-100スケール(yは上が大きい値=価格が高い、として上向きに変換)
+// points: [{x,y,label?,labelPos?}] x,yは0-100スケール(yは上が大きい値=価格が高い、として上向きに変換)
+// labelPosを省略すると前後の点との比較から山(top)/谷(bottom)を自動判定する
 function renderLineSVG(points, opts = {}) {
   const width = opts.width || 320;
-  const height = opts.height || 180;
-  const padTop = 16, padBottom = 20, padSide = 16;
+  const height = opts.height || 200;
+  const padTop = 26, padBottom = 26, padSide = 18;
   const innerW = width - padSide * 2;
   const innerH = height - padTop - padBottom;
   const scaleX = (x) => padSide + (x / 100) * innerW;
@@ -46,10 +47,19 @@ function renderLineSVG(points, opts = {}) {
   const pathD = points.map((p, i) => `${i === 0 ? 'M' : 'L'} ${scaleX(p.x)} ${scaleY(p.y)}`).join(' ');
   let dots = '';
   let labels = '';
-  points.forEach((p) => {
-    dots += `<circle cx="${scaleX(p.x)}" cy="${scaleY(p.y)}" r="3.5" fill="${opts.dotColor || '#d9424c'}"/>`;
+  points.forEach((p, i) => {
+    dots += `<circle cx="${scaleX(p.x)}" cy="${scaleY(p.y)}" r="4" fill="${opts.dotColor || '#d9424c'}"/>`;
     if (p.label) {
-      labels += `<text x="${scaleX(p.x)}" y="${scaleY(p.y) - 8}" font-size="10" text-anchor="middle" fill="var(--text)">${p.label}</text>`;
+      let pos = p.labelPos;
+      if (!pos) {
+        const prev = points[i - 1];
+        const next = points[i + 1];
+        if (prev && next) pos = (p.y >= prev.y && p.y >= next.y) ? 'top' : (p.y <= prev.y && p.y <= next.y) ? 'bottom' : 'top';
+        else if (prev) pos = p.y >= prev.y ? 'top' : 'bottom';
+        else pos = 'top';
+      }
+      const ly = pos === 'bottom' ? scaleY(p.y) + 17 : scaleY(p.y) - 11;
+      labels += `<text x="${scaleX(p.x)}" y="${ly}" font-size="12" font-weight="700" text-anchor="middle" fill="var(--text)" stroke="var(--diagram-bg)" stroke-width="4" paint-order="stroke">${p.label}</text>`;
     }
   });
 
