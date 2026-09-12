@@ -2,11 +2,11 @@
 // candles: [{o,h,l,c}] (値は0-100の相対スケール)
 function renderCandleSVG(candles, opts = {}) {
   const width = opts.width || 320;
-  const height = opts.height || 180;
-  const padTop = 16, padBottom = 16, padSide = 20;
+  const height = opts.height || 240;
+  const padTop = 20, padBottom = 20, padSide = 20;
   const innerH = height - padTop - padBottom;
   const step = (width - padSide * 2) / candles.length;
-  const bodyW = Math.max(6, step * 0.5);
+  const bodyW = Math.max(8, Math.min(step * 0.55, 46));
   const scaleY = (v) => padTop + innerH - (v / 100) * innerH;
 
   let bars = '';
