@@ -66,7 +66,7 @@ function renderLineSVG(points, opts = {}) {
   let extraLines = '';
   (opts.extraLines || []).forEach((line) => {
     const d = line.points.map((p, i) => `${i === 0 ? 'M' : 'L'} ${scaleX(p.x)} ${scaleY(p.y)}`).join(' ');
-    extraLines += `<path d="${d}" fill="none" stroke="${line.color || 'var(--muted)'}" stroke-width="${line.width || 1.5}" stroke-dasharray="${line.dash || '0'}"/>`;
+    extraLines += `<path d="${d}" fill="none" stroke="${line.color || 'var(--muted)'}" stroke-width="${line.width || 1.5}" stroke-dasharray="${line.dash || '0'}" stroke-linecap="round"/>`;
   });
 
   return `<svg viewBox="0 0 ${width} ${height}" class="diagram-svg" role="img" aria-label="トレンド図解">
