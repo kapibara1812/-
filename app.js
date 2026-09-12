@@ -152,6 +152,7 @@
     const chip = e.target.closest('.chip');
     if (!chip) return;
     selectCategory(chip.dataset.cat);
+    closeDetail();
   });
 
   searchInput.addEventListener('input', renderCards);
