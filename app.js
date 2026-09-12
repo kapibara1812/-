@@ -15,6 +15,13 @@
     return (str || '').toLowerCase();
   }
 
+  function renderDiagramSVG(diagram, sizeOpts) {
+    const opts = Object.assign({}, diagram.opts, sizeOpts);
+    if (diagram.type === 'candle') return renderCandleSVG(diagram.data, opts);
+    if (diagram.type === 'price-volume') return renderPriceVolumeSVG(diagram.data.points, diagram.data.volumes, opts);
+    return renderLineSVG(diagram.data, opts);
+  }
+
   function matchesQuery(item, query) {
     if (!query) return true;
     const haystack = normalize([item.title, item.summary, ...(item.tags || [])].join(' '));
@@ -44,13 +51,10 @@
     cardsEl.innerHTML = filtered
       .map((item) => {
         const thumb = item.diagrams && item.diagrams[0];
-        const thumbSvg = thumb
-          ? thumb.type === 'candle'
-            ? renderCandleSVG(thumb.data, { width: 80, height: 80 })
-            : renderLineSVG(thumb.data, { width: 80, height: 80 })
-          : '';
+        const thumbSvg = thumb ? renderDiagramSVG(thumb, { width: 80, height: 80 }) : '';
+        const accent = CATEGORY_COLORS[item.category] || '#8b5cf6';
         return `
-      <button class="card" data-id="${item.id}">
+      <button class="card" data-id="${item.id}" style="--card-accent:${accent}">
         ${thumbSvg ? `<div class="card-thumb">${thumbSvg}</div>` : ''}
         <div class="card-main">
           <span class="card-cat">${CATEGORY_LABELS[item.category] || item.category}</span>
@@ -72,14 +76,8 @@
   }
 
   function renderDiagram(diagram) {
-    let svg = '';
-    if (diagram.type === 'candle') {
-      svg = renderCandleSVG(diagram.data, diagram.opts);
-    } else if (diagram.type === 'line') {
-      svg = renderLineSVG(diagram.data, diagram.opts);
-    }
     return `<figure class="diagram">
-      ${svg}
+      ${renderDiagramSVG(diagram)}
       <figcaption>${diagram.caption}</figcaption>
     </figure>`;
   }

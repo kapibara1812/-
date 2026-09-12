@@ -77,3 +77,47 @@ function renderLineSVG(points, opts = {}) {
     ${labels}
   </svg>`;
 }
+
+// 価格ライン(points)と出来高の棒グラフ(volumes)を上下に重ねて表示する図解
+// points: [{x,y,label?,labelPos?}] volumes: [{x,v,color?}]
+function renderPriceVolumeSVG(points, volumes, opts = {}) {
+  const width = opts.width || 320;
+  const height = opts.height || 220;
+  const padSide = 18;
+  const innerW = width - padSide * 2;
+  const scaleX = (x) => padSide + (x / 100) * innerW;
+
+  const priceTop = 16, priceBottom = Math.round(height * 0.6);
+  const priceInnerH = priceBottom - priceTop;
+  const scaleYPrice = (y) => priceTop + priceInnerH - (y / 100) * priceInnerH;
+  const pathD = points.map((p, i) => `${i === 0 ? 'M' : 'L'} ${scaleX(p.x)} ${scaleYPrice(p.y)}`).join(' ');
+  let labels = '';
+  points.forEach((p) => {
+    if (!p.label) return;
+    const pos = p.labelPos || 'top';
+    const ly = pos === 'bottom' ? scaleYPrice(p.y) + 15 : scaleYPrice(p.y) - 9;
+    labels += `<text x="${scaleX(p.x)}" y="${ly}" font-size="11" font-weight="700" text-anchor="middle" fill="var(--text)" stroke="var(--diagram-bg)" stroke-width="3" paint-order="stroke">${p.label}</text>`;
+  });
+
+  const volTop = priceBottom + 14;
+  const volBottom = height - 8;
+  const volInnerH = volBottom - volTop;
+  const maxV = Math.max(...volumes.map((v) => v.v), 1);
+  const step = innerW / volumes.length;
+  const barW = Math.max(4, step * 0.55);
+  let bars = '';
+  volumes.forEach((v, i) => {
+    const h = (v.v / maxV) * volInnerH;
+    const x = padSide + step * i + (step - barW) / 2;
+    const y = volBottom - h;
+    bars += `<rect x="${x}" y="${y}" width="${barW}" height="${h}" fill="${v.color || opts.lineColor || '#8b5cf6'}" rx="2"/>`;
+  });
+
+  return `<svg viewBox="0 0 ${width} ${height}" class="diagram-svg" role="img" aria-label="価格と出来高の図解">
+    <rect x="0" y="0" width="${width}" height="${height}" fill="var(--diagram-bg)" rx="8"/>
+    <path d="${pathD}" fill="none" stroke="${opts.lineColor || '#d9424c'}" stroke-width="2.5"/>
+    ${labels}
+    <line x1="${padSide}" y1="${priceBottom + 6}" x2="${width - padSide}" y2="${priceBottom + 6}" stroke="var(--border)" stroke-width="1"/>
+    ${bars}
+  </svg>`;
+}
