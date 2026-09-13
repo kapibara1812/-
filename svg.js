@@ -38,10 +38,11 @@ function renderCandleSVG(candles, opts = {}) {
 function renderLineSVG(points, opts = {}) {
   const width = opts.width || 320;
   const height = opts.height || 200;
-  const padTop = 26, padBottom = 26, padSide = 18;
-  const innerW = width - padSide * 2;
+  const padTop = 26, padBottom = 26, padLeft = 18;
+  const padRight = opts.padRight || 18;
+  const innerW = width - padLeft - padRight;
   const innerH = height - padTop - padBottom;
-  const scaleX = (x) => padSide + (x / 100) * innerW;
+  const scaleX = (x) => padLeft + (x / 100) * innerW;
   const scaleY = (y) => padTop + innerH - (y / 100) * innerH;
 
   const pathD = points.map((p, i) => `${i === 0 ? 'M' : 'L'} ${scaleX(p.x)} ${scaleY(p.y)}`).join(' ');
@@ -72,6 +73,10 @@ function renderLineSVG(points, opts = {}) {
   (opts.extraLines || []).forEach((line) => {
     const d = line.points.map((p, i) => `${i === 0 ? 'M' : 'L'} ${scaleX(p.x)} ${scaleY(p.y)}`).join(' ');
     extraLines += `<path d="${d}" fill="none" stroke="${line.color || 'var(--muted)'}" stroke-width="${line.width || 1.5}" stroke-dasharray="${line.dash || '0'}" stroke-linecap="round"/>`;
+    if (line.label) {
+      const last = line.points[line.points.length - 1];
+      extraLines += `<text x="${scaleX(last.x) + 5}" y="${scaleY(last.y) + 3}" font-size="10" font-weight="700" text-anchor="start" fill="${line.color || 'var(--muted)'}">${line.label}</text>`;
+    }
   });
 
   return `<svg viewBox="0 0 ${width} ${height}" class="diagram-svg" role="img" aria-label="トレンド図解">
