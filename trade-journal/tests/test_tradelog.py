@@ -63,6 +63,18 @@ class TestImport(unittest.TestCase):
         self.assertEqual(trades[0].pnl_jpy, -10000)
         self.assertTrue(any("9984" in w for w in warns))
 
+    def test_shift_jis_file(self):
+        # 証券会社のCSVは Shift_JIS(cp932) で配布されるため、変換して読めることを確認
+        import tempfile
+
+        with tempfile.TemporaryDirectory() as d:
+            src = (FX / "rakuten_jp.csv").read_text(encoding="utf-8")
+            path = Path(d) / "rakuten_sjis.csv"
+            path.write_bytes(src.encode("cp932"))
+            execs, _ = parse_file(path)
+        self.assertEqual(len(execs), 4)
+        self.assertEqual(execs[0].name, "トヨタ自動車")
+
     def test_duplicate_files_ignored(self):
         execs, _ = load("rakuten_jp.csv", "rakuten_jp.csv")
         trades, _, _ = match(execs)
