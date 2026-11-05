@@ -7,7 +7,8 @@
 - **作業手順**: Claude Code のスキル（`.claude/skills/`）
   - `trade-import` … CSV を取り込んで Notion に登録
   - `trade-review` … チャートを見て1トレードを反省
-  - `trade-monthly-review` … 月次の集計と振り返り
+  - `trade-monthly-review` … 月次の集計と振り返り、パターン仮説の検証
+  - `trade-precheck` … 買う前チェックリストと過去の統計に照らした確認
 
 ## 使い方（Claude に頼むだけ）
 

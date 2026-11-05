@@ -9,7 +9,7 @@ sys.path.insert(0, str(ROOT))
 
 from tradelog.matcher import group_daytrades, match  # noqa: E402
 from tradelog.parsers import parse_file, parse_side  # noqa: E402
-from tradelog.stats import compute  # noqa: E402
+from tradelog.stats import compute, to_markdown  # noqa: E402
 
 FX = ROOT / "tests" / "fixtures"
 
@@ -146,6 +146,24 @@ class TestImport(unittest.TestCase):
 
 
 class TestStats(unittest.TestCase):
+    def test_dimensions_and_exit_execution(self):
+        recs = [
+            {"タイトル": "A", "損益(円)": -88732, "date:決済日:start": "2026-11-04", "市場": "日本株",
+             "保有想定": "長期（半年以上）", "保有日数": 12, "買いのタイプ": '["押し目・サポート反発", "急落の反発狙い"]',
+             "追加買い": "含み損で追加（ナンピン）", "撤退ライン(円)": 4936, "平均決済単価": 4930,
+             "決済日の安値(円)": 4710, "決済日の終値(円)": 5270, "撤退ラインの決定": "買った後に決めた"},
+            {"タイトル": "B", "損益(円)": -66970, "date:決済日:start": "2026-11-04", "市場": "日本株",
+             "保有想定": "長期（半年以上）", "保有日数": 5, "買いのタイプ": ["業績・バリュー", "急落の反発狙い"],
+             "追加買い": "なし"},
+        ]
+        s = compute(recs, "2026-11")
+        self.assertEqual(s["by_dimension"]["買いのタイプ別"]["急落の反発狙い"]["trades"], 2)
+        self.assertEqual(s["by_dimension"]["追加買い別"]["なし"]["pnl_jpy"], -66970)
+        e = s["exit_execution"][0]
+        self.assertEqual((e["vs_line"], e["vs_low"], e["vs_close"]), (-6, 220, -340))
+        self.assertEqual(s["plan_mismatch"], {"planned_long": 2, "closed_within_30d": 2, "pnl_jpy": -155702})
+        self.assertIn("撤退ラインの執行", to_markdown(s))
+
     def test_stats(self):
         recs = [
             {"損益(円)": "10,000", "エグジット日": "2026-10-01", "市場": "日本株", "失敗タグ": []},

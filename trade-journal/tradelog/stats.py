@@ -17,7 +17,33 @@ FIELD_ALIASES = {
     "style": ["style", "スタイル"],
     "tags": ["tags", "失敗タグ"],
     "good_tags": ["good_tags", "良かったタグ"],
+    "holding_plan": ["保有想定"],
+    "exit_rule_timing": ["撤退ラインの決定"],
+    "exit_reason": ["決済理由"],
+    "entry_type": ["買いのタイプ"],
+    "add_on": ["追加買い"],
+    "ma25": ["25日線の向き"],
+    "event": ["イベント接近"],
+    "theme": ["テーマ"],
+    "exit_line": ["撤退ライン(円)"],
+    "avg_exit": ["avg_exit", "平均決済単価"],
+    "exit_low": ["決済日の安値(円)"],
+    "exit_close": ["決済日の終値(円)"],
+    "holding_days": ["holding_days", "保有日数"],
+    "title": ["タイトル", "symbol"],
 }
+
+# 項目別の成績を出す対象: (内部キー, 見出し, 複数選択か)
+DIMENSIONS = [
+    ("holding_plan", "保有想定別", False),
+    ("entry_type", "買いのタイプ別", True),
+    ("ma25", "買った時の25日線の向き別", False),
+    ("add_on", "追加買い別", False),
+    ("exit_rule_timing", "撤退ラインを決めた時期別", False),
+    ("exit_reason", "決済理由別", False),
+    ("event", "イベント接近別", True),
+    ("theme", "テーマ別", True),
+]
 
 
 def _get(rec: dict, key: str):
@@ -106,16 +132,21 @@ def compute(records: Iterable[dict], month: Optional[str] = None) -> dict:
             continue
         if month and not exit_date.startswith(month):
             continue
-        rows.append(
-            {
-                "pnl": pnl,
-                "exit_date": exit_date,
-                "market": _market_label(_get(r, "market")),
-                "style": _get(r, "style") or "不明",
-                "tags": _tags(_get(r, "tags")),
-                "good_tags": _tags(_get(r, "good_tags")),
-            }
-        )
+        row = {
+            "pnl": pnl,
+            "exit_date": exit_date,
+            "title": str(_get(r, "title") or ""),
+            "market": _market_label(_get(r, "market")),
+            "style": _get(r, "style") or "不明",
+            "tags": _tags(_get(r, "tags")),
+            "good_tags": _tags(_get(r, "good_tags")),
+        }
+        for key, _, multi in DIMENSIONS:
+            v = _get(r, key)
+            row[key] = _tags(v) if multi else (str(v) if v else None)
+        for key in ("exit_line", "avg_exit", "exit_low", "exit_close", "holding_days"):
+            row[key] = _num(_get(r, key))
+        rows.append(row)
     rows.sort(key=lambda x: x["exit_date"])
 
     out = {"month": month, "overall": summarize([r["pnl"] for r in rows]), "skipped_no_pnl": skipped}
@@ -125,6 +156,47 @@ def compute(records: Iterable[dict], month: Optional[str] = None) -> dict:
         for r in rows:
             buckets[r[dim]].append(r["pnl"])
         out[f"by_{dim}"] = {k: summarize(v) for k, v in sorted(buckets.items())}
+
+    # 追加項目（保有想定・買いのタイプなど）ごとの成績。未入力のトレードは数えない
+    out["by_dimension"] = {}
+    for key, label, multi in DIMENSIONS:
+        buckets = defaultdict(list)
+        for r in rows:
+            vals = r[key] if multi else ([r[key]] if r[key] else [])
+            for v in vals:
+                buckets[v].append(r["pnl"])
+        if buckets:
+            out["by_dimension"][label] = {k: summarize(v) for k, v in sorted(buckets.items())}
+
+    # 撤退ラインどおりに売れたか（撤退ラインと決済単価が入っているトレード）
+    exits = []
+    for r in rows:
+        if r["exit_line"] and r["avg_exit"]:
+            exits.append(
+                {
+                    "title": r["title"],
+                    "exit_line": r["exit_line"],
+                    "avg_exit": r["avg_exit"],
+                    "vs_line": round(r["avg_exit"] - r["exit_line"], 1),
+                    "vs_low": round(r["avg_exit"] - r["exit_low"], 1) if r["exit_low"] else None,
+                    "vs_close": round(r["avg_exit"] - r["exit_close"], 1) if r["exit_close"] else None,
+                    "timing": r["exit_rule_timing"],
+                }
+            )
+    out["exit_execution"] = exits
+
+    # 保有想定と実際の保有期間のずれ（中期・長期のつもりで30日以内に決済）
+    mismatch = [
+        r for r in rows
+        if r["holding_plan"] and ("中期" in r["holding_plan"] or "長期" in r["holding_plan"])
+        and r["holding_days"] is not None and r["holding_days"] <= 30
+    ]
+    planned_long = [r for r in rows if r["holding_plan"] and ("中期" in r["holding_plan"] or "長期" in r["holding_plan"])]
+    out["plan_mismatch"] = {
+        "planned_long": len(planned_long),
+        "closed_within_30d": len(mismatch),
+        "pnl_jpy": round(sum(r["pnl"] for r in mismatch)),
+    }
 
     monthly = defaultdict(list)
     for r in rows:
@@ -183,6 +255,33 @@ def to_markdown(s: dict) -> str:
         for k, v in s["by_month"].items():
             lines.append(f"| {k} | {v['trades']} | {val(v['win_rate_pct'], '%')} | {yen(v['pnl_jpy'])} |")
         lines.append("")
+    for label, d in s.get("by_dimension", {}).items():
+        lines += [f"### {label}", "", "| 区分 | 取引数 | 勝率 | 損益 |", "|---|---|---|---|"]
+        for k, v in d.items():
+            lines.append(f"| {k} | {v['trades']} | {val(v['win_rate_pct'], '%')} | {yen(v['pnl_jpy'])} |")
+        lines.append("")
+    if s.get("exit_execution"):
+        lines += [
+            "### 撤退ラインの執行",
+            "",
+            "| トレード | 撤退ライン | 決済単価 | ラインとの差 | 当日安値との差 | 当日終値との差 | ラインを決めた時期 |",
+            "|---|---|---|---|---|---|---|",
+        ]
+        for e in s["exit_execution"]:
+            def d(v):
+                return "—" if v is None else f"{v:+,.0f}円"
+            lines.append(
+                f"| {e['title']} | {e['exit_line']:,.0f}円 | {e['avg_exit']:,.0f}円 | {d(e['vs_line'])} | {d(e['vs_low'])} | {d(e['vs_close'])} | {e['timing'] or '—'} |"
+            )
+        lines.append("")
+    pm = s.get("plan_mismatch")
+    if pm and pm["planned_long"]:
+        lines += [
+            "### 保有想定とのずれ",
+            "",
+            f"中期・長期のつもりで買った {pm['planned_long']}件のうち、30日以内に決済したのは {pm['closed_within_30d']}件（損益 {yen(pm['pnl_jpy'])}）",
+            "",
+        ]
     if s["failure_tags"]:
         lines += ["### 失敗パターン", "", "| タグ | 回数 | 該当トレードの損益 |", "|---|---|---|"]
         for t in s["failure_tags"]:
