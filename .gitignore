@@ -1,0 +1,5 @@
+# トレード反省ツール: 実際の売買履歴CSVや取込結果はリポジトリに入れない
+trade-journal/data/
+!trade-journal/data/.gitkeep
+__pycache__/
+*.pyc
