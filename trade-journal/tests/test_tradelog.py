@@ -28,8 +28,8 @@ class TestSide(unittest.TestCase):
         self.assertEqual(parse_side("株式現物買"), ("buy", False, False))
         self.assertEqual(parse_side("信用新規売"), ("sell", True, False))
         self.assertEqual(parse_side("信用返済買"), ("buy", True, True))
-        self.assertEqual(parse_side("売埋", "信用返済"), ("buy", True, True))
-        self.assertEqual(parse_side("買埋", "信用返済"), ("sell", True, True))
+        self.assertEqual(parse_side("売埋", "信用返済"), ("sell", True, True))
+        self.assertEqual(parse_side("買埋", "信用返済"), ("buy", True, True))
         self.assertEqual(parse_side("買付", "現物"), ("buy", False, False))
         self.assertIsNone(parse_side("現引", "信用返済"))
 
@@ -74,6 +74,24 @@ class TestImport(unittest.TestCase):
             execs, _ = parse_file(path)
         self.assertEqual(len(execs), 4)
         self.assertEqual(execs[0].name, "トヨタ自動車")
+
+    def test_rakuten_margin_close_with_open_info(self):
+        execs, warns = load("rakuten_jp_margin.csv")
+        trades, open_pos, w2 = match(execs)
+        by = {t.symbol: t for t in trades}
+        # 建玉の情報から新規を復元。同じ内容の2行は両方残る（200株のトレード）
+        t = by["1111"]
+        self.assertEqual(t.direction, "long")
+        self.assertEqual(t.qty, 200)
+        self.assertEqual(t.pnl_jpy, -10330)
+        self.assertEqual(t.broker_pnl, -10330)
+        self.assertEqual(t.entry_date.isoformat(), "2026-10-30")
+        # 新規の行がCSVにある場合は二重に数えない
+        t2 = by["2222"]
+        self.assertEqual(t2.pnl_jpy, 4760)
+        self.assertEqual(len(t2.fills), 2)
+        self.assertFalse(open_pos)
+        self.assertTrue(any("3333" in w and "建玉" in w for w in warns))
 
     def test_duplicate_files_ignored(self):
         execs, _ = load("rakuten_jp.csv", "rakuten_jp.csv")

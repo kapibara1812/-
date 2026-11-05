@@ -39,7 +39,7 @@ def _fills_table(fills: list[dict], currency: str) -> str:
     lines = [
         "## 約定明細",
         "",
-        f"| 約定日 | 時刻 | 売買 | 数量 | 単価({unit}) | 手数料({unit}) | 為替 |",
+        f"| 約定日 | 時刻 | 売買 | 数量 | 単価({unit}) | 手数料・金利等({unit}) | 為替 |",
         "|---|---|---|---|---|---|---|",
     ]
     for f in fills:

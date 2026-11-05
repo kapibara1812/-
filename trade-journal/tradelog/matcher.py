@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import hashlib
-from collections import defaultdict
+from collections import Counter, defaultdict
 from dataclasses import replace
 from typing import Optional
 
@@ -21,7 +21,8 @@ def classify_style(holding_days: int) -> str:
 
 
 def _trade_id(key: tuple, first: Execution) -> str:
-    raw = "|".join(str(k) for k in key) + f"|{first.trade_date}|{first.time}|{first.qty}|{first.price}"
+    # 時刻・手数料は含めない（返済行から復元した新規と、後から取り込んだ実際の新規で同じIDになるように）
+    raw = "|".join(str(k) for k in key) + f"|{first.trade_date}|{first.qty}|{first.price}"
     return hashlib.sha1(raw.encode()).hexdigest()[:12]
 
 
@@ -67,7 +68,12 @@ def _build_trade(key: tuple, fills: list[Execution]) -> Trade:
     return_pct = round(ret_basis / base * 100, 2) if base else None
     result = "勝ち" if ret_basis > 0.5 else "負け" if ret_basis < -0.5 else "引き分け"
 
+    closes = [f for f in exit_]
+    broker_pnl = (
+        round(sum(f.broker_pnl for f in closes)) if closes and all(f.broker_pnl is not None for f in closes) else None
+    )
     return Trade(
+        broker_pnl=broker_pnl,
         trade_id=_trade_id(key, first),
         market=market,
         symbol=symbol,
@@ -112,21 +118,56 @@ def match(execs: list[Execution]) -> tuple[list[Trade], list[dict], list[str]]:
     戻り値: (決済済みトレード, 未決済ポジション, 警告)
     同じ銘柄でも 現物/信用・口座区分（特定/NISA等）が違えば別ポジションとして扱う。
     """
-    # 重複行（同じCSVを2回渡した等）を除く
-    seen = set()
-    uniq = []
     # 時刻が無いCSV（同日の順序が不明）でも、同じ日の中では
     # 新規（現物買い・信用新規）→ 決済（現物売り・信用返済）の順に並べる
     def order(e: Execution):
         closing = e.is_close or (not e.margin and e.side == "sell")
         return (e.trade_date, e.time or "99:99", closing, e.source)
 
+    # 重複行（同じ期間のCSVを2回渡した等）を除く。
+    # 1つのファイル内で同じ内容の行が複数あるのは別々の約定なので残し、
+    # ファイルをまたいだ重複だけを除く（同じ内容の行は、最も多く含むファイルの件数まで残す）。
+    def sig(e: Execution):
+        return (e.trade_date, e.time, e.market, e.symbol, e.side, e.qty, e.price, round(e.fee, 4),
+                e.margin, e.account, e.broker, e.open_ref)
+
+    per_file: dict[str, Counter] = defaultdict(Counter)
+    for e in execs:
+        per_file[e.source.rsplit(":", 1)[0]][sig(e)] += 1
+    allowed: Counter = Counter()
+    for c in per_file.values():
+        for k, n in c.items():
+            allowed[k] = max(allowed[k], n)
+    used: Counter = Counter()
+    uniq = []
     for e in sorted(execs, key=order):
-        k = (e.trade_date, e.time, e.market, e.symbol, e.side, e.qty, e.price, e.margin, e.account, e.broker)
-        if k in seen:
+        k = sig(e)
+        if used[k] >= allowed[k]:
             continue
-        seen.add(k)
+        used[k] += 1
         uniq.append(e)
+
+    # 返済の行に建玉の情報がある場合は、新規の約定を復元する（建てた日がCSVの期間外でも損益を出せる）。
+    # 同じ新規の約定がCSVにもある場合はそちらを使い、復元した分は捨てる。
+    real_open = defaultdict(float)
+    for e in uniq:
+        if e.margin and not e.is_close:
+            real_open[(e.market, e.symbol, e.account, e.side, e.trade_date, round(e.price, 4))] += e.qty
+    restored = []
+    for e in uniq:
+        if not (e.is_close and e.open_ref):
+            continue
+        od, op, ofee = e.open_ref
+        open_side = "buy" if e.side == "sell" else "sell"
+        rk = (e.market, e.symbol, e.account, open_side, od, round(op, 4))
+        if real_open[rk] >= e.qty - EPS:
+            real_open[rk] -= e.qty
+            continue
+        restored.append(
+            replace(e, trade_date=od, time="", side=open_side, price=op, fee=ofee, is_close=False,
+                    open_ref=None, broker_pnl=None, synthetic=True, source=e.source + "（建玉）")
+        )
+    uniq = sorted(uniq + restored, key=order)
 
     groups: dict[tuple, list[Execution]] = defaultdict(list)
     for e in uniq:

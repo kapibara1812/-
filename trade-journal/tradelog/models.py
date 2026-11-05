@@ -30,6 +30,10 @@ class Execution:
     source: str  # 取込元ファイル名:行番号
     memo: str = ""
     is_close: bool = False  # 信用の返済（決済）注文か
+    # 返済の行に書かれている建玉の情報（楽天証券など）: (建約定日, 建単価, 建手数料＋消費税)
+    open_ref: Optional[tuple] = None
+    broker_pnl: Optional[float] = None  # 証券会社が計算した決済損益（信用返済の受渡金額）
+    synthetic: bool = False  # 返済行の建玉情報から復元した新規約定
 
     @property
     def currency(self) -> str:
@@ -67,6 +71,7 @@ class Trade:
     return_pct: Optional[float]  # 損益 ÷ 取得額（%）
     result: str  # 勝ち / 負け / 引き分け
     fills: list = field(default_factory=list)
+    broker_pnl: Optional[float] = None  # 証券会社のCSVに書かれた決済損益の合計（照合用）
 
     def to_dict(self) -> dict:
         d = asdict(self)

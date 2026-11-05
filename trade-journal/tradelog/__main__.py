@@ -68,6 +68,12 @@ def cmd_import(args) -> int:
             )
         s = result["summary"]
         print(f"\n合計 {_yen(s['pnl_jpy'])} / 勝率 {s['win_rate_pct']}%")
+        checked = [t for t in trades if t.broker_pnl is not None and t.pnl_jpy is not None]
+        if checked:
+            diff = [t for t in checked if abs(t.broker_pnl - t.pnl_jpy) > 1]
+            print(f"\n照合: 証券会社のCSVに損益が書かれている {len(checked)}件のうち、一致 {len(checked) - len(diff)}件")
+            for t in diff:
+                print(f"- 不一致 {t.exit_date} {t.symbol}: 計算 {_yen(t.pnl_jpy)} / CSV {_yen(t.broker_pnl)}")
     if open_positions:
         print("\n## 未決済（今回は登録しません）")
         for p in open_positions:

@@ -35,6 +35,10 @@ ALIASES: dict[str, list[str]] = {
     "account": ["口座区分", "口座", "預り", "預り区分"],
     "amount_jpy": ["受渡金額［円］", "受渡金額[円]"],
     "amount_usd": ["受渡金額［USドル］", "受渡金額[USドル]"],
+    "open_date": ["建約定日"],
+    "open_price": ["建単価［円］", "建単価[円]", "建単価［USドル］", "建単価"],
+    "open_fee": ["建手数料［円］", "建手数料[円]", "建手数料"],
+    "open_fee_tax": ["建手数料消費税［円］", "建手数料消費税[円]", "建手数料消費税"],
     "market": ["マーケット"],  # 手入力テンプレート用（JP/US）
     "memo": ["メモ", "備考"],
 }
@@ -128,7 +132,7 @@ def parse_time(s: str) -> str:
 def parse_side(side_text: str, type_text: str = "") -> Optional[tuple[str, bool, bool]]:
     """(売買の向き, 信用取引か, 返済注文か) を返す。対象外の行は None。
 
-    楽天証券の「売埋」は売建玉の返済＝買い戻し、「買埋」は買建玉の返済＝売り。
+    楽天証券の「売埋」は買建玉を売って返済（＝売り）、「買埋」は売建玉を買い戻して返済（＝買い）。
     """
     t = _norm(side_text) + "|" + _norm(type_text)
     if any(k in t for k in ("現引", "現渡", "入庫", "出庫", "配当", "分割", "移管")):
@@ -137,9 +141,9 @@ def parse_side(side_text: str, type_text: str = "") -> Optional[tuple[str, bool,
     is_close = "埋" in t or "返済" in t
     s = _norm(side_text)
     if "売埋" in s:
-        return "buy", True, True
-    if "買埋" in s:
         return "sell", True, True
+    if "買埋" in s:
+        return "buy", True, True
     # SBI: 「株式現物買」「信用新規売」「信用返済買」など。最後に出てくる売/買を採用
     last_buy = s.rfind("買")
     last_sell = s.rfind("売")
@@ -221,6 +225,25 @@ def parse_file(path: Path) -> tuple[list[Execution], list[str]]:
                         fx = jpy / usd
                 if fx is None:
                     warnings.append(f"{src}: 為替レートが無いため円換算できません（{symbol}）")
+            open_ref = None
+            broker_pnl = None
+            if side[2]:
+                od = get(row, "open_date")
+                op = to_number(get(row, "open_price"))
+                if _DATE_RE.search(od or "") and op > 0:
+                    open_ref = (
+                        parse_date(od),
+                        op,
+                        abs(to_number(get(row, "open_fee"))) + abs(to_number(get(row, "open_fee_tax"))),
+                    )
+                    amt = get(row, "amount_jpy").strip()
+                    if market == "JP" and _NUM_RE.sub("", amt.replace("-", "0")):
+                        broker_pnl = to_number(amt)
+                else:
+                    warnings.append(
+                        f"{src}: {symbol} の返済に建玉の情報（建約定日・建単価）がありません。"
+                        "当日の約定でまだ確定していない可能性があります。翌営業日以降のCSVで取り込み直してください"
+                    )
             execs.append(
                 Execution(
                     trade_date=parse_date(date_raw),
@@ -239,6 +262,8 @@ def parse_file(path: Path) -> tuple[list[Execution], list[str]]:
                     source=src,
                     memo=get(row, "memo").strip(),
                     is_close=side[2],
+                    open_ref=open_ref,
+                    broker_pnl=broker_pnl,
                 )
             )
         except (ParseError, ValueError) as e:
