@@ -1,0 +1,16 @@
+{
+  "permissions": {
+    "allow": [
+      "mcp__Notion__notion-fetch",
+      "mcp__Notion__notion-search",
+      "mcp__Notion__notion-query-data-sources",
+      "mcp__Notion__notion-create-pages",
+      "mcp__Notion__notion-update-page",
+      "mcp__Notion__notion-create-view",
+      "mcp__Notion__notion-update-view",
+      "mcp__Notion__notion-update-data-source",
+      "Bash(python3 -m tradelog:*)",
+      "Bash(python3 -m unittest:*)"
+    ]
+  }
+}
