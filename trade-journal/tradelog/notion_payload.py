@@ -84,6 +84,12 @@ def trade_page(t: dict) -> dict:
     if t["currency"] == "USD":
         props["損益(USD)"] = t["pnl_local"]
     content = REVIEW_TEMPLATE + "\n" + _fills_table(t["fills"], t["currency"])
+    bought = sum(f["qty"] for f in t["fills"] if f["side"] == "買")
+    if t["margin_label"] == "現物" and bought - t["qty"] > 1e-9:
+        content += (
+            f"\n\n保有{_fmt(bought)}株のうち{_fmt(t['qty'])}株を売却。"
+            "取得単価は保有株の平均（手数料込み）で計算しています。"
+        )
     return {"properties": props, "content": content}
 
 

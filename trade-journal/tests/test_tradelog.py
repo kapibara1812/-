@@ -93,6 +93,40 @@ class TestImport(unittest.TestCase):
         self.assertFalse(open_pos)
         self.assertTrue(any("3333" in w and "建玉" in w for w in warns))
 
+    def _manual(self, rows):
+        import tempfile
+
+        d = tempfile.mkdtemp()
+        path = Path(d) / "manual.csv"
+        path.write_text("約定日,約定時刻,マーケット,銘柄コード,銘柄名,売買,数量,単価,手数料,為替レート,口座,メモ\n" + "\n".join(rows) + "\n")
+        return parse_file(path)[0]
+
+    def test_cash_partial_sell_moving_average(self):
+        execs = self._manual([
+            "2026/10/01,,JP,9999,テスト,買,100,1000,100,,特定,",
+            "2026/10/02,,JP,9999,テスト,買,100,1200,100,,特定,",
+            "2026/10/10,,JP,9999,テスト,売,100,1300,100,,特定,",
+        ])
+        trades, open_pos, _ = match(execs)
+        self.assertEqual(len(trades), 1)
+        # 平均取得 (200,000+20,000+200)/200 = 1,101 → 130,000-100-110,100
+        self.assertEqual(trades[0].pnl_jpy, 19800)
+        self.assertEqual(open_pos[0]["position"], 100)
+
+    def test_cash_split(self):
+        from datetime import date
+
+        execs = self._manual([
+            "2026/08/01,,JP,8888,分割株,買,2,2000,0,,特定,",
+            "2026/10/01,,JP,8888,分割株,買,1,900,0,,特定,",
+            "2026/11/01,,JP,8888,分割株,売,5,1100,0,,特定,",
+        ])
+        trades, open_pos, warns = match(execs, [("8888", date(2026, 9, 1), 2)])
+        self.assertEqual(trades[0].qty, 5)
+        self.assertEqual(trades[0].pnl_jpy, 5500 - 4900)
+        self.assertFalse(open_pos)
+        self.assertFalse(warns)
+
     def test_duplicate_files_ignored(self):
         execs, _ = load("rakuten_jp.csv", "rakuten_jp.csv")
         trades, _, _ = match(execs)

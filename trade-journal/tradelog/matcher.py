@@ -112,11 +112,16 @@ def _build_trade(key: tuple, fills: list[Execution]) -> Trade:
     )
 
 
-def match(execs: list[Execution]) -> tuple[list[Trade], list[dict], list[str]]:
+def match(execs: list[Execution], splits: list[tuple] | None = None) -> tuple[list[Trade], list[dict], list[str]]:
     """約定リストからトレードを組み立てる。
 
     戻り値: (決済済みトレード, 未決済ポジション, 警告)
     同じ銘柄でも 現物/信用・口座区分（特定/NISA等）が違えば別ポジションとして扱う。
+
+    - 信用: 建ててから返済で建玉がゼロに戻るまでを1トレードとする。
+    - 現物: 売るたびに1トレードとし、取得単価は保有株の移動平均（手数料込み）で計算する
+      （証券会社の実現損益・特定口座の計算と同じ方式）。
+    splits: 株式分割 [(銘柄コード, 分割日, 倍率), ...]。分割日以降、保有数量を倍率倍にする（取得総額は変えない）。
     """
     # 時刻が無いCSV（同日の順序が不明）でも、同じ日の中では
     # 新規（現物買い・信用新規）→ 決済（現物売り・信用返済）の順に並べる
@@ -130,6 +135,16 @@ def match(execs: list[Execution]) -> tuple[list[Trade], list[dict], list[str]]:
     def sig(e: Execution):
         return (e.trade_date, e.time, e.market, e.symbol, e.side, e.qty, e.price, round(e.fee, 4),
                 e.margin, e.account, e.broker, e.open_ref)
+
+    # 同じファイル（同じファイル名・行番号）を2回渡した場合は、まずそれを除く
+    seen_src = set()
+    deduped = []
+    for e in execs:
+        if e.source in seen_src:
+            continue
+        seen_src.add(e.source)
+        deduped.append(e)
+    execs = deduped
 
     per_file: dict[str, Counter] = defaultdict(Counter)
     for e in execs:
@@ -178,6 +193,12 @@ def match(execs: list[Execution]) -> tuple[list[Trade], list[dict], list[str]]:
     warnings: list[str] = []
 
     for key, items in groups.items():
+        if not key[2]:  # 現物
+            t2, op, w = _match_cash(key, items, splits or [])
+            trades += t2
+            open_positions += op
+            warnings += w
+            continue
         pos = 0.0  # +ロング / -ショート
         cycle: list[Execution] = []
         queue = list(items)
@@ -222,6 +243,137 @@ def match(execs: list[Execution]) -> tuple[list[Trade], list[dict], list[str]]:
             )
 
     trades.sort(key=lambda t: (t.exit_date, t.entry_date, t.symbol))
+    return trades, open_positions, warnings
+
+
+def _match_cash(key: tuple, items: list[Execution], splits: list[tuple]):
+    """現物: 移動平均法。売るたびに1トレード。"""
+    market, symbol, margin, account = key
+    trades, warnings = [], []
+    my_splits = sorted((d, r) for (sym, d, r) in splits if sym == symbol)
+    qty = 0.0
+    gross_local = fee_local = 0.0
+    gross_jpy: Optional[float] = 0.0
+    fee_jpy: Optional[float] = 0.0
+    held: list[Execution] = []  # 現在の保有を作った買い
+    sells_in_holding = 0
+
+    def reset():
+        nonlocal qty, gross_local, fee_local, gross_jpy, fee_jpy, held, sells_in_holding
+        qty, gross_local, fee_local, gross_jpy, fee_jpy, held, sells_in_holding = 0.0, 0.0, 0.0, 0.0, 0.0, [], 0
+
+    for e in items:
+        while my_splits and my_splits[0][0] <= e.trade_date:
+            _, ratio = my_splits.pop(0)
+            qty *= ratio
+        if e.side == "buy":
+            qty += e.qty
+            gross_local += e.qty * e.price
+            fee_local += e.fee
+            if gross_jpy is not None and e.fx:
+                gross_jpy += e.qty * e.price * e.fx
+                fee_jpy += e.fee * e.fx
+            else:
+                gross_jpy = fee_jpy = None
+            held.append(e)
+            continue
+        # 売り
+        if qty < EPS:
+            warnings.append(
+                f"{e.source}: {symbol} の売りに対応する買いがCSVにありません。"
+                "買った時期を含むCSVを追加するか、手入力で補ってください"
+            )
+            continue
+        sq = e.qty
+        if sq > qty + EPS:
+            warnings.append(
+                f"{e.source}: {symbol} を保有数（{qty:g}株）より多く売っています（{sq:g}株）。"
+                "CSVの期間より前に買った分があるか、株式分割の可能性があります。保有数分だけ計算しました"
+            )
+            sq = qty
+        r = sq / qty
+        sell_fee = e.fee * sq / e.qty
+        cost_gross_local, cost_fee_local = gross_local * r, fee_local * r
+        pnl_local = sq * e.price - sell_fee - cost_gross_local - cost_fee_local
+        pnl_jpy = fees_j = entry_j = None
+        if gross_jpy is not None and e.fx:
+            cg, cf = gross_jpy * r, fee_jpy * r
+            pnl_jpy = sq * e.price * e.fx - sell_fee * e.fx - cg - cf
+            fees_j = sell_fee * e.fx + cf
+            entry_j = cg
+        full_exit = abs(sq - qty) < EPS
+        first = held[0]
+        if full_exit and sells_in_holding == 0:
+            tid = _trade_id(key, first)  # 1回の売りで全部手放したとき（従来どおりのID）
+        else:
+            raw = "|".join(str(k) for k in key) + f"|sell|{e.trade_date}|{sq}|{e.price}"
+            tid = hashlib.sha1(raw.encode()).hexdigest()[:12]
+        holding = (e.trade_date - first.trade_date).days
+        ret_basis = pnl_jpy if pnl_jpy is not None else pnl_local
+        base = entry_j if entry_j else cost_gross_local
+        fills = held + [replace(e, qty=sq, fee=sell_fee)]
+        trades.append(
+            Trade(
+                trade_id=tid,
+                market=market,
+                symbol=symbol,
+                name=next((f.name for f in fills if f.name), ""),
+                direction="long",
+                margin=False,
+                account=account,
+                broker=e.broker,
+                entry_date=first.trade_date,
+                exit_date=e.trade_date,
+                holding_days=holding,
+                style=classify_style(holding),
+                qty=sq,
+                avg_entry=round(gross_local / qty, 4),
+                avg_exit=round(e.price, 4),
+                currency=e.currency,
+                pnl_local=round(pnl_local, 2),
+                pnl_jpy=round(pnl_jpy) if pnl_jpy is not None else None,
+                fees_jpy=round(fees_j) if fees_j is not None else None,
+                entry_cost_jpy=round(entry_j) if entry_j is not None else None,
+                return_pct=round(ret_basis / base * 100, 2) if base else None,
+                result="勝ち" if ret_basis > 0.5 else "負け" if ret_basis < -0.5 else "引き分け",
+                fills=[
+                    {
+                        "date": f.trade_date.isoformat(),
+                        "time": f.time,
+                        "side": "買" if f.side == "buy" else "売",
+                        "qty": f.qty,
+                        "price": f.price,
+                        "fee": f.fee,
+                        "fx": f.fx,
+                        "source": f.source,
+                    }
+                    for f in fills
+                ],
+            )
+        )
+        qty -= sq
+        gross_local -= cost_gross_local
+        fee_local -= cost_fee_local
+        if gross_jpy is not None:
+            gross_jpy *= 1 - r
+            fee_jpy *= 1 - r
+        sells_in_holding += 1
+        if qty < EPS:
+            reset()
+
+    open_positions = []
+    if qty > EPS:
+        open_positions.append(
+            {
+                "market": market,
+                "symbol": symbol,
+                "name": next((f.name for f in held if f.name), ""),
+                "margin": False,
+                "position": qty,
+                "since": held[0].trade_date.isoformat() if held else "",
+                "fills": len(held),
+            }
+        )
     return trades, open_positions, warnings
 
 

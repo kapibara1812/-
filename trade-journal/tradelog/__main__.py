@@ -12,6 +12,7 @@ from __future__ import annotations
 import argparse
 import json
 import sys
+from datetime import date
 from pathlib import Path
 
 from .matcher import group_daytrades, match
@@ -38,7 +39,15 @@ def cmd_import(args) -> int:
         warnings += w
         brokers[path.name] = {"broker": e[0].broker if e else "不明", "executions": len(e)}
 
-    trades, open_positions, w2 = match(execs)
+    splits = []
+    for sp in args.split or []:
+        try:
+            sym, d, ratio = sp.split(":")
+            splits.append((sym.upper(), date.fromisoformat(d), float(ratio)))
+        except ValueError:
+            print(f"[エラー] --split の形式が違います: {sp}（例: 4062:2026-09-28:2）", file=sys.stderr)
+            return 1
+    trades, open_positions, w2 = match(execs, splits)
     warnings += w2
     result = {
         "files": brokers,
@@ -112,6 +121,7 @@ def main(argv=None) -> int:
     a = sub.add_parser("import", help="証券会社CSV・手入力CSVを取り込んでトレードにまとめる")
     a.add_argument("files", nargs="+")
     a.add_argument("--out", default="data/trades.json")
+    a.add_argument("--split", action="append", help="株式分割 銘柄コード:分割日:倍率（例: 4062:2026-09-28:2）。複数指定可")
     a.set_defaults(func=cmd_import)
     n = sub.add_parser("notion", help="Notion「トレード記録」に登録するページデータを出力する")
     n.add_argument("file", help="import の出力JSON")
